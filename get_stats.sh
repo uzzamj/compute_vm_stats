@@ -1,5 +1,9 @@
 #!/bin/bash
 
+host=$(cat /etc/systemd/system.conf | grep -i CPUAffinity |awk '{print $1}' |cut -d'=' -f2 )
+host_vcpu=$(cat /etc/systemd/system.conf | grep -i CPUAffinity )
+host1=$(wc -w <<< "$host_vcpu")
+
 numa_zero_vcpu=0
 numa_one_vcpu=0
 #numa_zero_mem=0
@@ -105,14 +109,51 @@ fi
 
 for i in $(sudo virsh list --all|grep running|awk '{print $1}'); do show_vnf ${i} && get_num_vcpus ${i} && get_cpu_list ${i} && show_vnf_memory ${i} &&  show_vnf_numa_node ${i} &&  echo -e "\n"; done
 
+if ((vcpu_node==20));then
 
+  if (( host >= 0 && host <= 19 ));then
+    echo "Host Numa Node is 0"
+    numa_zero_vcpu=$(($numa_zero_vcpu+$host1))
+  elif (( host >= 40 && host <= 59 ));then
+    echo "Host Numa Node is 0"
+    numa_zero_vcpu=$(($numa_zero_vcpu+$host1))
+  else
+    echo "Host Numa Node is 1"
+    numa_one_vcpu=$(($numa_one_vcpu+$host1))
+  fi
+elif ((vcpu_node==18)); then
+
+  if (( host >= 0 && host <= 17 ));then
+    echo "Host Numa Node is 0"
+    numa_zero_vcpu=$(($numa_zero_vcpu+$host1))
+ elif (( host >= 36 && host <= 53 ));then
+    echo "Host Numa Node is 0"
+    numa_zero_vcpu=$(($numa_zero_vcpu+$host1))
+  else
+    echo "Host Numa Node is 1"
+    numa_one_vcpu=$(($numa_one_vcpu+$host1))
+  fi
+else
+  echo "Host NUMA Configuration Unknown"
+fi
+echo $(sudo cat /etc/systemd/system.conf | grep -i CPUAffinity)
+
+echo -e "\n"
 free_numa_zero_vcpu=$(($total_vcpu - $numa_zero_vcpu))
 free_numa_one_vcpu=$(($total_vcpu - $numa_one_vcpu))
+fp=12
+free_numa_one_vcpu_fp=$(($free_numa_one_vcpu-$fp))
+
+echo "Fast Path VCPUs:"
+echo $(cat /etc/fast-path.env | grep -i FP_MASK)
+echo -e "\n"
 
 echo "Free NUMA 0 VCPUs:" 
 echo $free_numa_zero_vcpu
 echo "Free NUMA 1 VCPUs:"
 echo $free_numa_one_vcpu
+echo "Free NUMA 1 VCPUs after removing Fast Path VCPUs:"
+echo $free_numa_one_vcpu_fp
 
 echo "Free NUMA 0 Memory:"
 echo $(numactl -H | grep -i "node 0 free" |awk '{print $4}')
